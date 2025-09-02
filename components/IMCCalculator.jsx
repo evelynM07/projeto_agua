@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import {View, Text, TextInput, Button, StyleSheet, TouchableOpacity} from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 
 const IMCCalculator = () => {
     const [peso, setPeso] = useState('');
     const [altura, setAltura] = useState('');
     const [imc, setImc] = useState(null);
     const [categoria, setCategoria] = useState('');
+    const [metaAgua, setMetaAgua] = useState(null);
 
     const calcularIMC = () => {
         if (!peso || !altura) {
@@ -15,28 +16,25 @@ const IMCCalculator = () => {
         const alturaMetros = parseFloat(altura) / 100;
         const valorIMC = (parseFloat(peso) / (alturaMetros * alturaMetros)).toFixed(2);
         setImc(valorIMC);
-        setCategoria(classificarIMC(valorIMC));
+        setCategoria(classificarIMC(parseFloat(valorIMC)));
+        setMetaAgua((parseFloat(peso) * 35).toFixed(0)); // ml
     };
 
-    const classificarIMC = (valorIMC) => {
-        if (valorIMC < 18.5) {
-            return 'Abaixo do peso';
-        } else if (valorIMC < 24.9) {
-            return 'Peso normal';
-        } else if (valorIMC < 29.9) {
-            return 'Sobrepeso';
-        } else {
-            return 'Obesidade';
-        }
+    const classificarIMC = (valor) => {
+        if (valor < 18.5) return 'Abaixo do peso';
+        if (valor < 24.9) return 'Peso normal';
+        if (valor < 29.9) return 'Sobrepeso';
+        return 'Obesidade';
     };
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>Calculadora de IMC</Text>
+            <Text style={styles.title}>Seus Dados</Text>
+
             <TextInput
                 style={styles.input}
                 placeholder="Peso (kg)"
-                placeholderTextColor="#888888" // cor do placeholder
+                placeholderTextColor="#888888"
                 keyboardType="numeric"
                 value={peso}
                 onChangeText={setPeso}
@@ -44,27 +42,44 @@ const IMCCalculator = () => {
             <TextInput
                 style={styles.input}
                 placeholder="Altura (cm)"
-                placeholderTextColor="#888888" // cor do placeholder
+                placeholderTextColor="#888888"
                 keyboardType="numeric"
                 value={altura}
                 onChangeText={setAltura}
             />
+
             <TouchableOpacity style={styles.btn} onPress={calcularIMC}>
-                <Text style={styles.btnText}>CALCULAR META</Text>
+                <Text style={styles.btnText}>CALCULAR</Text>
             </TouchableOpacity>
 
-            {imc && (
-                <Text style={styles.result}>Seu IMC é: {imc}</Text>
-            )}
-
-                <View style={styles.result}>
-                    <Text>Seu IMC: {imc}</Text>
-                    <Text>Categoria: {categoria}</Text>
+            {(imc && metaAgua) && (
+                <View style={styles.cardShadow}>
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>Resultados</Text>
+                        <View style={styles.row}>
+                            <Text style={styles.label}>IMC</Text>
+                            <Text style={styles.value}>{imc}</Text>
+                        </View>
+                        <View style={styles.row}>
+                            <Text style={styles.label}>Categoria</Text>
+                            <Text style={styles.value}>{categoria}</Text>
+                        </View>
+                        <View style={styles.row}>
+                            <Text style={styles.label}>Meta de água</Text>
+                            <Text style={styles.value}>{metaAgua} ml/dia</Text>
+                        </View>
+                    </View>
                 </View>
-            )
+            )}
         </View>
     );
 };
+
+const CARD_BG = '#FFFFFF';
+const CARD_BORDER = '#E6EEF4';
+const TEXT_PRIMARY = '#1F2D3D';
+const TEXT_SECONDARY = '#5C6B7A';
+const ACCENT = '#91D5E0'; // próximo da sua paleta azul clara
 
 const styles = StyleSheet.create({
     container: {
@@ -76,38 +91,86 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         fontWeight: 'bold',
         textAlign: 'center',
+        color: TEXT_PRIMARY,
     },
     input: {
         borderWidth: 1,
-        backgroundColor: '#dee9f3',
-        borderColor: '#dee9f3',
-        borderRadius: 5,
-        paddingHorizontal: 10,
+        backgroundColor: '#F4F8FB',
+        borderColor: '#D9E6F2',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         marginBottom: 10,
-        color: '#555555',
-    },
-    result: {
-        marginTop: 16,
-        fontSize: 18,
-        fontWeight: 'bold',
+        color: '#3A4B5C',
     },
     btn: {
-        backgroundColor: '#289efd',
+        backgroundColor: ACCENT,
         alignItems: 'center',
         justifyContent: 'center',
-        width: '170',
         height: 50,
-        fontWeight: 'bold',
-        borderRadius: 10,
-        borderColor: '#035aa6',
+        borderRadius: 12,
+        borderColor: '#74BDE0',
         borderWidth: 2,
-        marginLeft: '25%',
+        marginTop: 6,
+        marginBottom: 8,
     },
     btnText: {
-        color: 'white',
+        color: '#0C1B2A',
         fontWeight: 'bold',
         fontSize: 16,
-    }
+    },
+
+    // Card com sombra suave e cantos arredondados
+    cardShadow: {
+        borderRadius: 14,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.08,
+                shadowRadius: 12,
+            },
+            android: {
+                elevation: 6,
+            },
+        }),
+    },
+    card: {
+        backgroundColor: CARD_BG,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: CARD_BORDER,
+        padding: 16,
+    },
+    cardTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: TEXT_PRIMARY,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    row: {
+        marginTop: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        backgroundColor: '#FAFDFF',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#EEF5FA',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    label: {
+        color: TEXT_SECONDARY,
+        fontSize: 14,
+    },
+    value: {
+        color: TEXT_PRIMARY,
+        fontSize: 16,
+        fontWeight: '700',
+    },
 });
 
 export default IMCCalculator;
+
