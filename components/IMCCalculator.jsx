@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Menu from './Menu';
 
 const IMCCalculator = () => {
     const [peso, setPeso] = useState('');
@@ -7,6 +9,7 @@ const IMCCalculator = () => {
     const [imc, setImc] = useState(null);
     const [categoria, setCategoria] = useState('');
     const [metaAgua, setMetaAgua] = useState(null);
+    const insets = useSafeAreaInsets();
 
     const calcularIMC = () => {
         if (!peso || !altura) {
@@ -17,7 +20,7 @@ const IMCCalculator = () => {
         const valorIMC = (parseFloat(peso) / (alturaMetros * alturaMetros)).toFixed(2);
         setImc(valorIMC);
         setCategoria(classificarIMC(parseFloat(valorIMC)));
-        setMetaAgua((parseFloat(peso) * 35).toFixed(0)); // ml
+        setMetaAgua((parseFloat(peso) * 35).toFixed(0));
     };
 
     const classificarIMC = (valor) => {
@@ -28,49 +31,60 @@ const IMCCalculator = () => {
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Seus Dados</Text>
+        <View style={styles.screen}>
+            <KeyboardAvoidingView
+                style={styles.flex}
+                behavior={Platform.select({ ios: 'padding', android: 'height' })}
+            >
+                <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 16 }]}>
+                    <Text style={styles.title}>Seus Dados</Text>
 
-            <TextInput
-                style={styles.input}
-                placeholder="Peso (kg)"
-                placeholderTextColor="#888888"
-                keyboardType="numeric"
-                value={peso}
-                onChangeText={setPeso}
-            />
-            <TextInput
-                style={styles.input}
-                placeholder="Altura (cm)"
-                placeholderTextColor="#888888"
-                keyboardType="numeric"
-                value={altura}
-                onChangeText={setAltura}
-            />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Peso (kg)"
+                        placeholderTextColor="#888888"
+                        keyboardType="numeric"
+                        value={peso}
+                        onChangeText={setPeso}
+                    />
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Altura (cm)"
+                        placeholderTextColor="#888888"
+                        keyboardType="numeric"
+                        value={altura}
+                        onChangeText={setAltura}
+                    />
 
-            <TouchableOpacity style={styles.btn} onPress={calcularIMC}>
-                <Text style={styles.btnText}>CALCULAR</Text>
-            </TouchableOpacity>
+                    <TouchableOpacity style={styles.btn} onPress={calcularIMC}>
+                        <Text style={styles.btnText}>CALCULAR</Text>
+                    </TouchableOpacity>
 
-            {(imc && metaAgua) && (
-                <View style={styles.cardShadow}>
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Resultados</Text>
-                        <View style={styles.row}>
-                            <Text style={styles.label}>IMC</Text>
-                            <Text style={styles.value}>{imc}</Text>
+                    {(imc && metaAgua) && (
+                        <View style={styles.cardShadow}>
+                            <View style={styles.card}>
+                                <Text style={styles.cardTitle}>Resultados</Text>
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>IMC</Text>
+                                    <Text style={styles.value}>{imc}</Text>
+                                </View>
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Categoria</Text>
+                                    <Text style={styles.value}>{categoria}</Text>
+                                </View>
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Meta de água</Text>
+                                    <Text style={styles.value}>{metaAgua} ml/dia</Text>
+                                </View>
+                            </View>
                         </View>
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Categoria</Text>
-                            <Text style={styles.value}>{categoria}</Text>
-                        </View>
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Meta de água</Text>
-                            <Text style={styles.value}>{metaAgua} ml/dia</Text>
-                        </View>
-                    </View>
+                    )}
+                </ScrollView>
+
+                <View style={{ paddingBottom: insets.bottom, backgroundColor: '#74bde0' }}>
+
                 </View>
-            )}
+            </KeyboardAvoidingView>
         </View>
     );
 };
@@ -79,13 +93,12 @@ const CARD_BG = '#FFFFFF';
 const CARD_BORDER = '#E6EEF4';
 const TEXT_PRIMARY = '#1F2D3D';
 const TEXT_SECONDARY = '#5C6B7A';
-const ACCENT = '#91D5E0'; // próximo da sua paleta azul clara
+const ACCENT = '#91D5E0';
 
 const styles = StyleSheet.create({
-    container: {
-        padding: 20,
-        marginTop: 20,
-    },
+    screen: { flex: 1, backgroundColor: '#FFFFFF' },
+    flex: { flex: 1 },
+    content: { padding: 20, paddingTop: 20 },
     title: {
         fontSize: 22,
         marginBottom: 12,
@@ -114,25 +127,12 @@ const styles = StyleSheet.create({
         marginTop: 6,
         marginBottom: 8,
     },
-    btnText: {
-        color: '#0C1B2A',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-
-    // Card com sombra suave e cantos arredondados
+    btnText: { color: '#0C1B2A', fontWeight: 'bold', fontSize: 16 },
     cardShadow: {
         borderRadius: 14,
         ...Platform.select({
-            ios: {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: 0.08,
-                shadowRadius: 12,
-            },
-            android: {
-                elevation: 6,
-            },
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12 },
+            android: { elevation: 6 },
         }),
     },
     card: {
@@ -142,13 +142,7 @@ const styles = StyleSheet.create({
         borderColor: CARD_BORDER,
         padding: 16,
     },
-    cardTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: TEXT_PRIMARY,
-        marginBottom: 8,
-        textAlign: 'center',
-    },
+    cardTitle: { fontSize: 18, fontWeight: '700', color: TEXT_PRIMARY, marginBottom: 8, textAlign: 'center' },
     row: {
         marginTop: 8,
         paddingVertical: 10,
@@ -161,16 +155,14 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    label: {
-        color: TEXT_SECONDARY,
-        fontSize: 14,
-    },
-    value: {
-        color: TEXT_PRIMARY,
-        fontSize: 16,
-        fontWeight: '700',
-    },
+    label: { color: TEXT_SECONDARY, fontSize: 14 },
+    value: { color: TEXT_PRIMARY, fontSize: 16, fontWeight: '700' },
 });
 
-export default IMCCalculator;
-
+export default function ScreenWrapper() {
+    return (
+        <SafeAreaProvider>
+            <IMCCalculator />
+        </SafeAreaProvider>
+    );
+}

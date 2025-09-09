@@ -1,5 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, Platform, KeyboardAvoidingView, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Menu from './Menu';
 
 let Circular;
 try {
@@ -8,93 +11,169 @@ try {
     Circular = null;
 }
 
+/* Utils simples de data */
+const todayKey = () => {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`; // YYYY-MM-DD
+};
+const formatLabel = (iso, nowIso) => {
+    const d = new Date(iso);
+    const now = new Date(nowIso);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const diff = Math.floor((new Date(now.toDateString()) - new Date(d.toDateString())) / msPerDay);
+    if (diff === 0) return 'Hoje';
+    if (diff === 1) return 'Ontem';
+    // Retorna dia da semana: Domingo...Sábado
+    const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    return dias[d.getDay()];
+};
+const toLitros = (ml) => `${(ml / 1000).toFixed(1)} L`;
+
+const STORAGE_KEY = '@agua-historico'; // objeto { 'YYYY-MM-DD': ml }
+
 const HydrationProgress = () => {
-    const [metaMl] = useState(2300);        // 2,3 L
-    const [consumoMl, setConsumoMl] = useState(1500); // 1,5 L inicial
+    const [metaMl] = useState(2300);
+    const [historicoMap, setHistoricoMap] = useState({});      // {dateISO: ml}
+    const [hojeKey, setHojeKey] = useState(todayKey());
+    const insets = useSafeAreaInsets();
 
-    const { pct, faltaMl } = useMemo(() => {
-        const meta = Math.max(1, Number(metaMl) || 1);
-        const consumo = Math.max(0, Number(consumoMl) || 0);
-        return {
-            pct: Math.min(100, Math.round((consumo / meta) * 100)),
-            faltaMl: Math.max(0, meta - consumo),
-        };
-    }, [metaMl, consumoMl]);
+    // Carrega do armazenamento
+    useEffect(() => {
+        (async () => {
+            try {
+                const raw = await AsyncStorage.getItem(STORAGE_KEY);
+                const obj = raw ? JSON.parse(raw) : {};
+                // Garante chave do dia atual
+                const key = todayKey();
+                setHojeKey(key);
+                if (obj[key] == null) obj[key] = 0;
+                setHistoricoMap(obj);
+            } catch (e) {
+                Alert.alert('Aviso', 'Não foi possível carregar o histórico.');
+            }
+        })();
+    }, []);
 
-    const adicionar = (ml = 500) =>
-        setConsumoMl((prev) => Math.min(Number(metaMl) || prev, prev + ml));
+    useEffect(() => {
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(historicoMap)).catch(() => {});
+    }, [historicoMap]);
 
-    const historico = [
-        { dia: 'Hoje', valor: 2500 },
-        { dia: 'Ontem', valor: 2000 },
-        { dia: 'Segunda', valor: 2400 },
-        { dia: 'Domingo', valor: 3000 },
-        { dia: 'Sábado', valor: 2800 },
-    ];
+    const consumoMl = historicoMap[hojeKey] || 0;
 
-    const toLitros = (ml) => `${(ml / 1000).toFixed(1)} L`;
+    const adicionar = useCallback((ml = 500) => {
+        setHistoricoMap((prev) => {
+            const key = todayKey();
+            const atual = prev[key] || 0;
+            return { ...prev, [key]: atual + ml }; // sem limite
+        });
+    }, []);
+
+    const remover = useCallback((ml = 500) => {
+        setHistoricoMap((prev) => {
+            const key = todayKey();
+            const atual = prev[key] || 0;
+            const novo = Math.max(0, atual - ml); // evita negativos
+            return { ...prev, [key]: novo };
+        });
+    }, []);
+
+    // Gera lista para UI: últimos 5 dias, incluindo hoje
+    const lista = useMemo(() => {
+        const now = todayKey();
+        const days = [];
+        for (let i = 0; i < 5; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const iso = `${d.getFullYear()}-${mm}-${dd}`;
+            days.push({
+                iso,
+                label: formatLabel(iso, now),
+                valor: historicoMap[iso] || 0,
+            });
+        }
+        return days;
+    }, [historicoMap]);
+
+    const pctRaw = (consumoMl / Math.max(1, metaMl)) * 100;
+    const pct = Math.min(100, Math.round(pctRaw));
+    const faltaMl = Math.max(0, metaMl - consumoMl);
+    const metaBatida = consumoMl >= metaMl;
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.titulo}>Seu Progresso</Text>
+        <View style={{ flex: 1, backgroundColor: FUNDO }}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.select({ ios: 'padding', android: 'height' })}>
+                <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16 }}>
+                    <Text style={styles.titulo}>Seu Progresso</Text>
 
-            <Text style={styles.metaLinha}>
-                Sua meta hoje: <Text style={styles.metaStrong}>{toLitros(metaMl)}</Text>
-            </Text>
 
-            <View style={styles.centro}>
-                {Circular ? (
-                    <Circular
-                        value={pct}
-                        maxValue={100}
-                        radius={70}
-                        activeStrokeWidth={10}
-                        inActiveStrokeWidth={10}
-                        inActiveStrokeOpacity={0.15}
-                        activeStrokeColor="#2B7DE9"
-                        inActiveStrokeColor="#2B7DE9"
-                        progressValueStyle={{ fontSize: 22, fontWeight: '800', color: '#1F2D3D' }}
-                        valueSuffix="%"
-                        title={`${toLitros(consumoMl)}\n de ${toLitros(metaMl)}`}
-                        titleColor="#65758B"
-                        titleStyle={{ fontSize: 12, lineHeight: 16, textAlign: 'center', marginTop: 6 }}
-                        duration={800}
-                    />
-                ) : (
-                    <View style={styles.fallbackCard}>
-                        <Text style={styles.fallbackBig}>{toLitros(consumoMl)}</Text>
-                        <Text style={styles.fallbackSmall}>de {toLitros(metaMl)} • {pct}%</Text>
-                        <Text style={styles.fallbackHint}>
-                            FOCO!
-                        </Text>
+
+                    <View style={styles.centro}>
+                        {Circular ? (
+                            <Circular
+                                value={pct}
+                                maxValue={100}
+                                radius={70}
+                                activeStrokeWidth={10}
+                                inActiveStrokeWidth={10}
+                                inActiveStrokeOpacity={0.15}
+                                activeStrokeColor={metaBatida ? '#22C55E' : '#2B7DE9'}
+                                inActiveStrokeColor="#2B7DE9"
+                                progressValueStyle={{ fontSize: 22, fontWeight: '800', color: '#1F2D3D' }}
+                                valueSuffix="%"
+                                title={`${toLitros(consumoMl)}\n de ${toLitros(metaMl)}`}
+                                titleColor="#65758B"
+                                titleStyle={{ fontSize: 12, lineHeight: 16, textAlign: 'center', marginTop: 6 }}
+                                duration={800}
+                            />
+                        ) : (
+                            <View style={styles.fallbackCard}>
+                                <Text style={styles.fallbackBig}>{toLitros(consumoMl)}</Text>
+                                <Text style={styles.fallbackHint}>{ 'FOCO!'}</Text>
+                            </View>
+                        )}
                     </View>
-                )}
-            </View>
 
-            <Text style={styles.mensagem}>Continue! Falta só {toLitros(faltaMl)}</Text>
 
-            <TouchableOpacity style={styles.botao} onPress={() => adicionar(500)}>
-                <Text style={styles.botaoTexto}>+ 500 ML</Text>
-            </TouchableOpacity>
 
-            <View style={styles.histCard}>
-                <Text style={styles.histTitulo}>Histórico Diário</Text>
-                <FlatList
-                    data={historico}
-                    keyExtractor={(item, idx) => `${item.dia}-${idx}`}
-                    ItemSeparatorComponent={() => <View style={styles.sep} />}
-                    renderItem={({ item }) => (
-                        <View style={styles.histLinha}>
-                            <Text style={styles.histDia}>{item.dia}</Text>
-                            <Text style={styles.histValor}>{toLitros(item.valor)}</Text>
-                        </View>
-                    )}
-                    scrollEnabled={false}
-                />
-            </View>
+                    <View style={styles.botoesLinha}>
+                        <TouchableOpacity style={[styles.botao, styles.botaoMais]} onPress={() => adicionar(500)}>
+                            <Text style={styles.botaoTexto}>+ 500 ML</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.botao, styles.botaoMenos]} onPress={() => remover(500)} disabled={consumoMl <= 0}>
+                            <Text style={styles.botaoTexto}>- 500 ML</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.histCard}>
+                        <Text style={styles.histTitulo}>Histórico Diário</Text>
+                        <FlatList
+                            data={lista}
+                            keyExtractor={(item) => item.iso}
+                            ItemSeparatorComponent={() => <View style={styles.sep} />}
+                            renderItem={({ item }) => (
+                                <View style={styles.histLinha}>
+                                    <Text style={styles.histDia}>{item.label}</Text>
+                                    <Text style={styles.histValor}>{toLitros(item.valor)}</Text>
+                                </View>
+                            )}
+                            scrollEnabled={false}
+                        />
+                    </View>
+                </ScrollView>
+
+                <View style={{ paddingBottom: insets.bottom, backgroundColor: '#74bde0' }}>
+                    <Menu />
+                </View>
+            </KeyboardAvoidingView>
         </View>
     );
 };
+
 
 const AZUL = '#2B7DE9';
 const FUNDO = '#F7FAFD';
@@ -103,7 +182,25 @@ const CARD_BORDER = '#E6EEF4';
 const TEXTO = '#1F2D3D';
 const TEXTO_2 = '#65758B';
 
+
+
 const styles = StyleSheet.create({
+
+    botoesLinha: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+
+    botaoMais: {
+        // opcional
+    },
+    botaoMenos: {
+        backgroundColor: '#CDE9FF',
+        borderColor: '#1B6FD8',
+    },
+
     container: {
         flex: 1,
         backgroundColor: FUNDO,
@@ -215,7 +312,7 @@ const styles = StyleSheet.create({
     },
     fallbackHint: {
         fontSize: 10,
-        color: TEXTO_2,
+        color: 'green',
         marginTop: 8,
         textAlign: 'center'
     },
